@@ -19,7 +19,9 @@ curl --fail --location --retry 3 --retry-all-errors \
 printf '%s  %s\n' "${APK_SHA256}" "${apk_path}" | sha256sum --check --strict
 adb install --no-incremental -r "${apk_path}" 2>&1 | tee "${artifact_dir}/install.txt"
 
-adb logcat --clear
+# Some API 26 system images reject clearing the main buffer; the emulator is
+# fresh for every job, so continuing still yields an isolated application log.
+adb logcat --clear 2>/dev/null || true
 adb shell am force-stop "${PACKAGE_NAME}"
 adb shell am start -W -n "${PACKAGE_NAME}/${ACTIVITY_NAME}" \
   | tee "${artifact_dir}/activity-start.txt"
