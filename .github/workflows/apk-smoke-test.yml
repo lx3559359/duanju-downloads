@@ -1,0 +1,67 @@
+name: APK smoke test
+
+on:
+  workflow_dispatch:
+    inputs:
+      apk_url:
+        description: Public APK URL
+        required: true
+        default: https://github.com/lx3559359/duanju-downloads/releases/download/v0.1.0-preview.1/duanju.apk
+      apk_sha256:
+        description: Expected SHA-256 digest
+        required: true
+        default: e28283900f4dc3c4b943acae92940219dabae824d6e547fa0969cc8e32c6615f
+      package_name:
+        description: Android application ID
+        required: true
+        default: com.duanju.android.mobile
+      activity_name:
+        description: Launcher activity class
+        required: true
+        default: com.duanju.mobile.MainActivity
+      expected_text:
+        description: Text that must appear on the first screen
+        required: true
+        default: 你的私人短剧片库
+
+permissions:
+  contents: read
+
+jobs:
+  launch:
+    name: Android API ${{ matrix.api-level }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [26, 35]
+
+    steps:
+      - name: Check out smoke-test script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install, launch, and inspect APK
+        uses: ReactiveCircus/android-emulator-runner@c9c93e6ba9c4194322e114c40970d5983d9a07cc # v2.38.0
+        env:
+          API_LEVEL: ${{ matrix.api-level }}
+          APK_URL: ${{ inputs.apk_url }}
+          APK_SHA256: ${{ inputs.apk_sha256 }}
+          PACKAGE_NAME: ${{ inputs.package_name }}
+          ACTIVITY_NAME: ${{ inputs.activity_name }}
+          EXPECTED_TEXT: ${{ inputs.expected_text }}
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: google_apis
+          arch: x86_64
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: bash .github/scripts/smoke-test-apk.sh
+
+      - name: Upload diagnostic bundle
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: apk-smoke-api-${{ matrix.api-level }}
+          path: smoke-artifacts/api-${{ matrix.api-level }}
+          if-no-files-found: warn
+          retention-days: 1
