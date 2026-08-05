@@ -17,7 +17,7 @@ curl --fail --location --retry 3 --retry-all-errors \
   "${APK_URL}"
 
 printf '%s  %s\n' "${APK_SHA256}" "${apk_path}" | sha256sum --check --strict
-adb install --no-incremental --replace "${apk_path}" | tee "${artifact_dir}/install.txt"
+adb install --no-incremental -r "${apk_path}" 2>&1 | tee "${artifact_dir}/install.txt"
 
 adb logcat --clear
 adb shell am force-stop "${PACKAGE_NAME}"
