@@ -6,15 +6,15 @@ on:
       apk_url:
         description: Public APK URL
         required: true
-        default: https://github.com/lx3559359/duanju-downloads/releases/download/v0.1.0-preview.1/duanju.apk
+        default: https://github.com/lx3559359/duanju-downloads/releases/download/v0.1.22-preview/duanju-0.1.22-preview-debug.apk
       apk_sha256:
         description: Expected SHA-256 digest
         required: true
-        default: e28283900f4dc3c4b943acae92940219dabae824d6e547fa0969cc8e32c6615f
+        default: 7627461a9fbc71f73da31520e4881c8d0887c8b4d84baeb19c32b452b6411c17
       package_name:
         description: Android application ID
         required: true
-        default: com.duanju.android.mobile
+        default: com.duanju.android.mobile.debug
       activity_name:
         description: Launcher activity class
         required: true
@@ -22,7 +22,7 @@ on:
       expected_text:
         description: Text that must appear on the first screen
         required: true
-        default: 你的私人短剧片库
+        default: 搜索中心
 
 permissions:
   contents: read
