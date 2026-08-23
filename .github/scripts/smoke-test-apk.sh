@@ -22,15 +22,38 @@ adb install --no-incremental -r "${apk_path}" 2>&1 | tee "${artifact_dir}/instal
 # Some API 26 system images reject clearing the main buffer; the emulator is
 # fresh for every job, so continuing still yields an isolated application log.
 adb logcat --clear 2>/dev/null || true
-adb shell am force-stop "${PACKAGE_NAME}"
-adb shell am start -W -n "${PACKAGE_NAME}/${ACTIVITY_NAME}" \
-  | tee "${artifact_dir}/activity-start.txt"
 
-# Let the first Compose frame and asynchronous startup work settle before inspection.
-sleep 8
+# Fresh Google API images can surface an unrelated launcher ANR over an otherwise
+# healthy app. Suppress system error dialogs in this disposable emulator, then
+# keep the app checks strict through process, package, Fatal and ANR assertions.
+adb shell settings put global hide_error_dialogs 1 >/dev/null 2>&1 || true
+adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1 || true
 
-adb shell uiautomator dump /sdcard/duanju-window.xml || true
-adb pull /sdcard/duanju-window.xml "${artifact_dir}/window.xml" || true
+expected_package_marker="package=\"${PACKAGE_NAME}\""
+ui_ready=0
+for attempt in 1 2 3; do
+  adb shell am force-stop "${PACKAGE_NAME}"
+  adb shell am start -W -n "${PACKAGE_NAME}/${ACTIVITY_NAME}" \
+    | tee "${artifact_dir}/activity-start.txt"
+
+  # Let the first Compose frame and asynchronous startup work settle.
+  sleep 8
+  adb shell uiautomator dump /sdcard/duanju-window.xml || true
+  adb pull /sdcard/duanju-window.xml "${artifact_dir}/window.xml" || true
+
+  if [[ -s "${artifact_dir}/window.xml" ]] \
+    && grep -Fq "${expected_package_marker}" "${artifact_dir}/window.xml" \
+    && grep -Fq "${EXPECTED_TEXT}" "${artifact_dir}/window.xml"; then
+    ui_ready=1
+    break
+  fi
+
+  # Dismiss only the current system-level overlay before the bounded retry.
+  adb shell input keyevent KEYCODE_BACK >/dev/null 2>&1 || true
+  adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1 || true
+  sleep 2
+done
+
 adb exec-out screencap -p > "${artifact_dir}/screenshot.png" || true
 adb logcat -d -v threadtime > "${artifact_dir}/logcat.txt"
 adb shell dumpsys activity activities > "${artifact_dir}/activities.txt"
@@ -48,8 +71,12 @@ if grep -A 20 -F "FATAL EXCEPTION" "${artifact_dir}/logcat.txt" \
   failure=1
 fi
 
-if [[ ! -s "${artifact_dir}/window.xml" ]] \
-  || ! grep -Fq "${EXPECTED_TEXT}" "${artifact_dir}/window.xml"; then
+if grep -Fq "ANR in ${PACKAGE_NAME}" "${artifact_dir}/logcat.txt"; then
+  echo "ERROR: ActivityManager recorded an ANR for ${PACKAGE_NAME}." >&2
+  failure=1
+fi
+
+if [[ ${ui_ready} -ne 1 ]]; then
   echo "ERROR: Expected first-screen text was not found: ${EXPECTED_TEXT}" >&2
   failure=1
 fi
